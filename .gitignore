@@ -1,0 +1,8 @@
+target
+main
+
+.terraform
+.terraform.lock.hcl
+terraform-key.json
+*.tfstate
+*.tfstate*
