@@ -2,7 +2,7 @@ use std::{
     io::{prelude::*, BufReader},
     net::{TcpListener, TcpStream},
 };
-use smoke_test::ThreadPool;
+use shared::pool::ThreadPool;
 
 fn main() {
     let listener = TcpListener::bind("0.0.0.0:8080").unwrap();
