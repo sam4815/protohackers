@@ -12,7 +12,9 @@ destroy:
 ssh:
   gcloud compute ssh protohackers
 
-deploy directory:
-  podman build --build-arg SOURCE_DIR={{directory}} --platform linux/amd64 -t gcr.io/{{project}}/{{directory}} .
-  podman push gcr.io/{{project}}/{{directory}}
+deploy directory $IMAGE=("gcr.io/" + project + "/" + directory):
+  podman build --build-arg SOURCE_DIR={{directory}} --platform linux/amd64 -t $IMAGE .
+  podman push $IMAGE
+  gcloud compute instances add-metadata protohackers \
+    --metadata=gce-container-declaration="$(envsubst < container-spec.yaml)"
   gcloud compute ssh protohackers --command "sudo systemctl start konlet-startup"

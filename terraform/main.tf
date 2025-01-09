@@ -35,21 +35,6 @@ resource "google_compute_instance" "protohackers" {
     }
   }
 
-  metadata = {
-    "gce-container-declaration" = <<EOF
-spec:
-  containers:
-    - name: protohackers
-      image: gcr.io/proto-446020/smoke_test
-      stdin: false
-      tty: false
-      ports:
-        - name: http
-          containerPort: 8080
-  restartPolicy: Always
-EOF
-  }
-
   service_account {
     email  = "default"
     scopes = ["cloud-platform"]
