@@ -1,15 +1,16 @@
 # Builder
-FROM rust:1.67 as builder
+FROM rust:1.83-slim as builder
 
 ARG SOURCE_DIR
 
 WORKDIR /usr/src/${SOURCE_DIR}
 COPY ./${SOURCE_DIR} .
+COPY ./shared ../shared
 
 RUN cargo install --path .
 
 # Runner
-FROM debian:bullseye-slim
+FROM debian:stable-slim
 
 ARG SOURCE_DIR
 
