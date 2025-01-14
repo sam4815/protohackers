@@ -13,7 +13,7 @@ fn main() -> Result<()> {
     for stream in listener.incoming() {
         let stream = stream?;
 
-        pool.execute(|| {
+        pool.execute(|_| {
             if let Err(e) = handle_connection(stream) {
                 eprintln!("Connection error: {}", e);
             }
