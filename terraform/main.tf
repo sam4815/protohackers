@@ -13,6 +13,11 @@ resource "google_compute_firewall" "default" {
     ports    = ["8080"]
   }
 
+  allow {
+    protocol = "udp"
+    ports    = ["8080"]
+  }
+
   source_ranges = ["0.0.0.0/0"]
 }
 
