@@ -1,0 +1,8 @@
+[package]
+name = "mob_in_the_middle"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+fancy-regex = "0.14.0"
+shared = { path = "../shared" }
