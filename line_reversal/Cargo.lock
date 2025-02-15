@@ -5,3 +5,10 @@ version = 4
 [[package]]
 name = "line_reversal"
 version = "0.1.0"
+dependencies = [
+ "shared",
+]
+
+[[package]]
+name = "shared"
+version = "0.1.0"
