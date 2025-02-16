@@ -1,6 +1,6 @@
 mod lcrp;
 
-use lcrp::{LrcpListener, LrcpStream};
+use lcrp::{listener::LrcpListener, stream::LrcpStream};
 use shared::pool::ThreadPool;
 use std::io::{BufRead, BufReader, ErrorKind, Result, Write};
 
