@@ -25,25 +25,20 @@ fn handle_connection(stream: LrcpStream) -> Result<()> {
     let mut reader = BufReader::new(&stream);
     let mut writer = &stream;
 
-    println!("Beginning for listen for message on stream {}", stream.session_id);
-
     loop {
         let mut line = String::new();
         match reader.read_line(&mut line) {
             Ok(0) => break,
             Ok(_) => {
                 line.pop();
-                println!("App layer received for client {}: {}", stream.session_id, line);
                 let mut response = line.chars().rev().collect::<String>();
-                response.push_str("\n");
-                writer.write(response.as_bytes())?;
+                response.push('\n');
+                writer.write_all(response.as_bytes())?;
             }
             Err(e) if e.kind() == ErrorKind::WouldBlock => {}
             Err(_) => break,
         }
     }
-
-    println!("It's all over for {}", stream.session_id);
 
     Ok(())
 }

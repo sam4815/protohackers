@@ -1,11 +1,19 @@
-#[path = "./parse.rs"] mod parse;
-use std::{cell::RefCell, collections::HashSet, io::{self, Error, ErrorKind, Read, Write}, net::{SocketAddr, UdpSocket}, str, thread, time::Duration, usize};
+#[path = "./parse.rs"]
+mod parse;
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    io::{self, Error, ErrorKind, Read, Write},
+    net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
+    str, thread,
+    time::Duration,
+};
 
-use parse::{parse_message, LcrpMessage};
+use parse::{escape, parse_message, LcrpMessage};
 
 pub struct LrcpListener {
     pub socket: UdpSocket,
-    pub sessions: HashSet<i32>,
+    pub sessions: HashMap<i32, i32>,
 }
 
 pub struct Incoming<'a> {
@@ -17,17 +25,21 @@ pub struct LrcpStream {
     pub socket: UdpSocket,
     pub src: SocketAddr,
     pub ack: RefCell<i32>,
+    pub llen: RefCell<i32>,
     pub received: RefCell<String>,
     pub sent: RefCell<String>,
     pub open: RefCell<bool>,
-    pub last_seen: RefCell<i32>,
 }
 
 impl LrcpListener {
     pub fn bind(address: &str) -> io::Result<LrcpListener> {
         let socket = UdpSocket::bind(address)?;
+        socket.set_nonblocking(true)?;
 
-        Ok(LrcpListener{socket, sessions: HashSet::new()})
+        Ok(LrcpListener {
+            socket,
+            sessions: HashMap::new(),
+        })
     }
 
     pub fn incoming(&mut self) -> Incoming {
@@ -36,58 +48,89 @@ impl LrcpListener {
 
     pub fn accept(&mut self) -> io::Result<LrcpStream> {
         loop {
-            thread::sleep(Duration::from_millis(250));
-            let mut buf = vec![0; 1000];
-            let (amt, src) = self.socket.peek_from(&mut buf)?;
-            
-            match parse_message(&buf[..amt], 0) {
-                Ok(LcrpMessage::Connect{ session_id }) => {
+            thread::sleep(Duration::from_millis(5));
+            let mut buf = vec![0; 10000];
+            let (amt, src) = match self.socket.peek_from(&mut buf) {
+                Ok((0, _)) => {
+                    self.socket.recv_from(&mut buf)?;
+                    continue;
+                }
+                Ok(value) => value,
+                Err(_) => (
+                    0,
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
+                ),
+            };
+
+            match parse_message(&buf[..amt]) {
+                Ok(LcrpMessage::Connect { session_id }) => {
                     self.socket.recv_from(&mut buf)?;
 
                     let response = format!("/ack/{}/0/", session_id);
                     self.socket.send_to(response.to_string().as_bytes(), src)?;
-                    self.socket.set_read_timeout(Some(Duration::from_secs(10)))?;
-                    
+
                     let clone = self.socket.try_clone()?;
 
-                    if self.sessions.contains(&session_id) {
+                    if self.sessions.contains_key(&session_id) {
                         continue;
                     }
 
-                    self.sessions.insert(session_id);
+                    self.sessions.insert(session_id, 0);
 
-                    println!("Creating new stream. Streams: {:?}", self.sessions);
-
-                    let stream = LrcpStream{
+                    let stream = LrcpStream {
                         session_id,
                         src,
                         socket: clone,
-                        last_seen: RefCell::new(0),
                         ack: RefCell::new(0),
+                        llen: RefCell::new(0),
                         open: RefCell::new(true),
                         received: RefCell::new("".to_string()),
                         sent: RefCell::new("".to_string()),
                     };
 
-                    return Ok(stream)
+                    return Ok(stream);
                 }
-                Ok(LcrpMessage::Close{ ref session_id }) if self.sessions.contains(session_id) => {
+                Ok(LcrpMessage::Close { ref session_id })
+                    if self.sessions.contains_key(session_id) =>
+                {
+                    self.socket.recv_from(&mut buf)?;
                     self.sessions.remove(session_id);
                 }
-                Ok(LcrpMessage::Ack { ref session_id, .. }
+                Ok(
+                    LcrpMessage::Ack { ref session_id, .. }
+                    | LcrpMessage::Data { ref session_id, .. },
+                ) if self.sessions.contains_key(session_id) => {
+                    self.increment_all();
+                    self.sessions.insert(*session_id, 0);
+                }
+                Ok(
+                    LcrpMessage::Ack { ref session_id, .. }
                     | LcrpMessage::Close { ref session_id }
-                    | LcrpMessage::Data { ref session_id, .. }) if !self.sessions.contains(session_id) => {
+                    | LcrpMessage::Data { ref session_id, .. },
+                ) if !self.sessions.contains_key(session_id) => {
+                    self.increment_all();
                     self.socket.recv_from(&mut buf)?;
                     let response = format!("/close/{}/", session_id);
                     self.socket.send_to(response.to_string().as_bytes(), src)?;
+                }
+                Err(e) if e.kind() == ErrorKind::InvalidData => {
+                    self.socket.recv_from(&mut buf)?;
                 }
                 _ => {}
             }
         }
     }
+
+    pub fn increment_all(&mut self) {
+        for value in self.sessions.values_mut() {
+            *value += 1;
+        }
+
+        self.sessions.retain(|_, v| *v < 25000);
+    }
 }
 
-impl<'a> Iterator for Incoming<'a> {
+impl Iterator for Incoming<'_> {
     type Item = io::Result<LrcpStream>;
     fn next(&mut self) -> Option<io::Result<LrcpStream>> {
         Some(self.listener.accept())
@@ -96,80 +139,103 @@ impl<'a> Iterator for Incoming<'a> {
 
 impl LrcpStream {
     fn poll(&self) -> io::Result<()> {
-        thread::sleep(Duration::from_millis(100));
+        thread::sleep(Duration::from_millis(5));
 
-        let mut last_seen = self.last_seen.borrow_mut();
+        let mut lrcp_buf = vec![0; 10000];
+        let (amt, _) = match self.socket.peek_from(&mut lrcp_buf) {
+            Ok(value) => value,
+            Err(_) => (
+                0,
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
+            ),
+        };
 
-        if *last_seen >= 100 {
-            return Err(Error::from(ErrorKind::ConnectionAborted));
-        } else {
-            *last_seen += 1;
-        }
-        println!("last_seen: {}", last_seen);
-
-        let mut lrcp_buf = vec![0; 1000];
-        let (amt, _) = self.socket.peek_from(&mut lrcp_buf)?;
-
-        match parse_message(&lrcp_buf[..amt], self.session_id) {
-            Ok(LcrpMessage::Data{session_id, data, pos}) if session_id == self.session_id => {
+        match parse_message(&lrcp_buf[..amt]) {
+            Ok(LcrpMessage::Data {
+                session_id,
+                data,
+                pos,
+            }) if session_id == self.session_id => {
                 self.socket.recv_from(&mut lrcp_buf)?;
-                *last_seen = 0;
 
                 let mut ack = self.ack.borrow_mut();
 
                 if pos > *ack {
                     let response = format!("/ack/{}/{}/", session_id, ack);
-                    self.socket.send_to(response.to_string().as_bytes(), self.src)?;
+                    self.socket
+                        .send_to(response.to_string().as_bytes(), self.src)?;
                 }
-                
+
+                if pos < *ack && (pos + data.len() as i32) > *ack {
+                    let response = format!("/ack/{}/{}/", session_id, ack);
+                    self.socket
+                        .send_to(response.to_string().as_bytes(), self.src)?;
+                }
+
                 if pos == *ack {
-                    self.received.borrow_mut().push_str(&str::from_utf8(&data).unwrap());
+                    self.received
+                        .borrow_mut()
+                        .push_str(str::from_utf8(&data).unwrap());
                     *ack += data.len() as i32;
 
                     let response = format!("/ack/{}/{}/", session_id, ack);
-                    self.socket.send_to(response.to_string().as_bytes(), self.src)?;
+                    self.socket
+                        .send_to(response.to_string().as_bytes(), self.src)?;
                 }
 
                 Ok(())
             }
-            Ok(LcrpMessage::Ack{session_id, len}) if session_id == self.session_id => {
+            Ok(LcrpMessage::Ack { session_id, len }) if session_id == self.session_id => {
                 self.socket.recv_from(&mut lrcp_buf)?;
-                *last_seen = 0;
-
-                println!("Client {} acknowledges receipt up to {}.", self.session_id, len);
 
                 if len > self.sent.borrow().len() as i32 {
-                    return self.close();
+                    let response = format!("/close/{}/", session_id);
+                    self.socket
+                        .send_to(response.to_string().as_bytes(), self.src)?;
+                    return Err(Error::from(ErrorKind::ConnectionAborted));
                 }
 
+                let mut llen = self.llen.borrow_mut();
+                *llen = len;
+
                 if len < self.sent.borrow().len() as i32 {
-                    println!("Client {} needs resend from position {}", self.session_id, len);
                     let response = format!(
                         "/data/{}/{}/{}/",
                         self.session_id,
                         len,
-                        &self.sent.borrow()[(len as usize)..],
+                        escape(self.sent.borrow()[(len as usize)..].to_string()),
                     );
-                    self.socket.send_to(response.to_string().as_bytes(), self.src)?;
+                    self.socket
+                        .send_to(response.to_string().as_bytes(), self.src)?;
+                    thread::sleep(Duration::from_millis(10));
                 }
 
                 Ok(())
             }
-            Ok(LcrpMessage::Close{session_id}) if session_id == self.session_id => {
-                self.socket.recv_from(&mut lrcp_buf)?;
-                self.close()
+            Ok(LcrpMessage::Close { session_id }) if session_id == self.session_id => {
+                let response = format!("/close/{}/", self.session_id);
+                self.socket
+                    .send_to(response.to_string().as_bytes(), self.src)?;
+
+                Err(Error::from(ErrorKind::ConnectionAborted))
             }
-            _ => Ok(())
+            _ => {
+                let llen = self.llen.borrow();
+
+                if *llen < self.sent.borrow().len() as i32 {
+                    let response = format!(
+                        "/data/{}/{}/{}/",
+                        self.session_id,
+                        llen,
+                        escape(self.sent.borrow()[(*llen as usize)..].to_string()),
+                    );
+                    self.socket
+                        .send_to(response.to_string().as_bytes(), self.src)?;
+                }
+
+                Ok(())
+            }
         }
-    }
-
-    fn close(&self) -> io::Result<()> {
-        let response = format!("/close/{}/", self.session_id);
-        self.socket.send_to(response.to_string().as_bytes(), self.src)?;
-
-        *self.open.borrow_mut() = false;
-
-        Err(Error::from(ErrorKind::ConnectionAborted))
     }
 }
 
@@ -185,14 +251,10 @@ impl Read for &LrcpStream {
                         received.drain(..=n);
                         Ok(n + 1)
                     }
-                    _ => {
-                        Err(Error::from(ErrorKind::WouldBlock))
-                    }
+                    _ => Err(Error::from(ErrorKind::WouldBlock)),
                 }
             }
-            Err(_) => {
-                Ok(0)
-            }
+            Err(_) => Ok(0),
         }
     }
 }
@@ -200,14 +262,19 @@ impl Read for &LrcpStream {
 impl Write for &LrcpStream {
     fn write(&mut self, write_buf: &[u8]) -> io::Result<usize> {
         let data = str::from_utf8(write_buf).unwrap();
-        let response = format!("/data/{}/{}/{}/", self.session_id, self.sent.borrow().len(), data);
-        println!("Attempting to send to client {}: {}", self.session_id, response);
 
-        self.socket.send_to(response.to_string().as_bytes(), self.src)?;
+        let response = format!(
+            "/data/{}/{}/{}/",
+            self.session_id,
+            self.sent.borrow().len(),
+            escape(data.to_string())
+        );
+        self.socket
+            .send_to(response.to_string().as_bytes(), self.src)?;
+
         self.sent.borrow_mut().push_str(data);
-        println!("The target ack for client {} is now {}", self.session_id, self.sent.borrow().len());
 
-        return Ok(write_buf.len());
+        Ok(write_buf.len())
     }
 
     fn flush(&mut self) -> io::Result<()> {
