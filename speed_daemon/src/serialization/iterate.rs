@@ -31,7 +31,7 @@ impl<R: Read> Iterator for MessageIterator<R> {
                     },
                     0x20 => match serialize_options.deserialize::<Plate>(&buffer[1..]) {
                         Ok(message) => Some(Ok(Message::Plate(message))),
-                        Err(e) => Some(Err(Box::new(Error::new(
+                        _ => Some(Err(Box::new(Error::new(
                             ErrorKind::InvalidData,
                             "Invalid plate message",
                         )))),
@@ -71,7 +71,7 @@ impl<R: Read> Iterator for MessageIterator<R> {
                     )))),
                 }
             }
-            Err(e) if e.kind() == ErrorKind::UnexpectedEof => None,
+            Err(e) if e.kind() == ErrorKind::WouldBlock => None,
             Err(e) => Some(Err(Box::new(e))),
         }
     }
