@@ -1,20 +1,8 @@
-mod serialization;
-
 use std::collections::HashMap;
-use serialization::models::{LengthPrefixedString, Ticket};
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Sighting {
-    pub plate: String,
-    pub timestamp: u32,
-    pub road: u16,
-    pub mile: u16,
-    pub limit: u16,
-}
+use crate::models::{Sighting, Ticket};
 
 #[derive(Clone, Debug)]
 pub struct Road {
-    pub id: u16,
     pub limit: u16,
 }
 
@@ -30,12 +18,6 @@ pub struct Car {
     pub ticket_days: Vec<u32>
 }
 
-#[derive(Clone, Debug)]
-pub enum SpeedMessage {
-    TicketRequired(Ticket),
-    TicketSent(Ticket),
-    Sighting(Sighting),
-}
 
 impl Car {
     pub fn new(plate: String) -> Self {
@@ -55,7 +37,7 @@ impl Car {
             None => {
                 self.roads.insert(
                     sighting.road,
-                    Road{ id: sighting.road, limit: sighting.limit },
+                    Road{ limit: sighting.limit },
                 );
                 self.sightings.insert(
                     sighting.road,
@@ -79,7 +61,7 @@ impl Car {
                         if mph > road.limit as f32 + 0.5 {
                             tickets.insert(0, Ticket{
                                 road: *road_id,
-                                plate: LengthPrefixedString(self.plate.clone()),
+                                plate: self.plate.clone(),
                                 mile1: first.mile,
                                 timestamp1: first.timestamp,
                                 mile2: second.mile,
