@@ -38,6 +38,6 @@ pub fn write_heartbeat(writer: &mut impl Write) -> std::io::Result<()> {
 }
 
 pub fn write_error(writer: &mut impl Write, error: String) -> std::io::Result<()> {
-    write_char(writer, 0x20)?;
+    write_char(writer, 0x10)?;
     write_string(writer, error)
 }

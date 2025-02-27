@@ -53,11 +53,9 @@ pub struct IAmDispatcher {
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    ClientError(ClientError),
     Plate(Plate),
     Ticket(Ticket),
     WantHeartbeat(WantHeartbeat),
-    Heartbeat(Heartbeat),
     IAmCamera(IAmCamera),
     IAmDispatcher(IAmDispatcher),
     Sighting(Sighting),
