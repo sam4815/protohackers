@@ -12,6 +12,9 @@ destroy:
 ssh:
   gcloud compute ssh protohackers
 
+logs:
+  @gcloud compute ssh protohackers -- 'docker logs $(docker ps -q) --timestamps'
+
 deploy directory $IMAGE=("gcr.io/" + project + "/" + directory):
   podman build --build-arg SOURCE_DIR={{directory}} --platform linux/amd64 -t $IMAGE .
   podman push $IMAGE
