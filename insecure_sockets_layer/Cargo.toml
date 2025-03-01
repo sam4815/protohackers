@@ -1,0 +1,7 @@
+[package]
+name = "insecure_sockets_layer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+shared = { path = "../shared" }
