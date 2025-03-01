@@ -6,6 +6,7 @@ use serde_json::Value;
 pub enum Request {
     Get {
         queues: Vec<String>,
+        #[serde(default)]
         wait: bool,
     },
     Put {
@@ -22,19 +23,27 @@ pub enum Request {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "request", rename_all = "lowercase")]
+#[serde(untagged)]
 pub enum Response {
     Get {
         status: String,
         id: u32,
+        job: Value,
+        pri: u32,
+        queue: String,
     },
     Put {
         status: String,
+        id: u32,
     },
     Delete {
         status: String,
     },
     Abort {
         status: String,
+    },
+    Error {
+        status: String,
+        error: String,
     },
 }
