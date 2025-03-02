@@ -47,7 +47,7 @@ impl QueueManager {
 
         if let Some(queue) = self.queues.get_mut(&queue_id) {
             queue.push(job);
-            queue.sort_by(|a, b| a.pri.cmp(&b.pri));
+            queue.sort_by(|a, b| b.pri.cmp(&a.pri));
         } else {
             self.queues.insert(queue_id, vec![job]);
         }
@@ -60,9 +60,12 @@ impl QueueManager {
             return "no-job".to_string();
         }
 
-        self.queues.get_mut(&job.queue_id).unwrap().push(job);
+        if let Some(queue) = self.queues.get_mut(&job.queue_id.clone()) {
+            queue.push(job);
+            queue.sort_by(|a, b| b.pri.cmp(&a.pri));
+        }
 
-        return "ok".to_string();
+        "ok".to_string()
     }
 
     pub fn delete_job(&mut self, job_id: u32) -> String {
@@ -82,7 +85,7 @@ impl QueueManager {
             }
         }
 
-        return "no-job".to_string();
+        "no-job".to_string()
     }
 
     pub fn pop_job(&mut self, queue_id: String) -> Option<Job> {
@@ -97,9 +100,10 @@ impl QueueManager {
             .max_by_key(|job| job.pri);
 
         if let Some(job) = highest_priority_job {
-            return self.pop_job(job.queue_id.clone());
+            self.allocated.insert(job.id);
+            self.pop_job(job.queue_id.clone())
         } else {
-            return None;
+            None
         }
     }
 }
