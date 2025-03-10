@@ -2,7 +2,7 @@ use std::io::ErrorKind;
 use std::io::{prelude::Read, BufReader, Error, Result};
 use std::str;
 
-use crate::checksum::calculate_checksum;
+use crate::helpers::calculate_checksum;
 use crate::models::{
     Hello, Message, MessageIterator, Okay, PestControlError, PolicyResult, SiteVisit,
     TargetPopulation, TargetPopulations, VisitPopulation,
@@ -98,7 +98,10 @@ impl<R: Read> Iterator for MessageIterator<R> {
                 let checksum = read_byte(&mut self.reader, &mut bytes_read).ok()?;
 
                 if !is_valid_message(bytes_read, message_length, checksum) {
-                    return Some(Err(Error::from(ErrorKind::InvalidData)));
+                    return Some(Err(Error::new(
+                        ErrorKind::InvalidData,
+                        "Invalid Hello message",
+                    )));
                 }
 
                 Some(Ok(Message::Hello(Hello { protocol, version })))
@@ -109,7 +112,10 @@ impl<R: Read> Iterator for MessageIterator<R> {
                 let checksum = read_byte(&mut self.reader, &mut bytes_read).ok()?;
 
                 if !is_valid_message(bytes_read, message_length, checksum) {
-                    return Some(Err(Error::from(ErrorKind::InvalidData)));
+                    return Some(Err(Error::new(
+                        ErrorKind::InvalidData,
+                        "Invalid PestControlError message",
+                    )));
                 }
 
                 Some(Ok(Message::PestControlError(PestControlError { message })))
@@ -119,7 +125,10 @@ impl<R: Read> Iterator for MessageIterator<R> {
                 let checksum = read_byte(&mut self.reader, &mut bytes_read).ok()?;
 
                 if !is_valid_message(bytes_read, message_length, checksum) {
-                    return Some(Err(Error::from(ErrorKind::InvalidData)));
+                    return Some(Err(Error::new(
+                        ErrorKind::InvalidData,
+                        "Invalid Okay message",
+                    )));
                 }
 
                 Some(Ok(Message::Okay(Okay {})))
@@ -132,7 +141,10 @@ impl<R: Read> Iterator for MessageIterator<R> {
                 let checksum = read_byte(&mut self.reader, &mut bytes_read).ok()?;
 
                 if !is_valid_message(bytes_read, message_length, checksum) {
-                    return Some(Err(Error::from(ErrorKind::InvalidData)));
+                    return Some(Err(Error::new(
+                        ErrorKind::InvalidData,
+                        "Invalid TargetPopulations message",
+                    )));
                 }
 
                 Some(Ok(Message::TargetPopulations(TargetPopulations {
@@ -146,7 +158,10 @@ impl<R: Read> Iterator for MessageIterator<R> {
                 let checksum = read_byte(&mut self.reader, &mut bytes_read).ok()?;
 
                 if !is_valid_message(bytes_read, message_length, checksum) {
-                    return Some(Err(Error::from(ErrorKind::InvalidData)));
+                    return Some(Err(Error::new(
+                        ErrorKind::InvalidData,
+                        "Invalid PolicyResult message",
+                    )));
                 }
 
                 Some(Ok(Message::PolicyResult(PolicyResult { policy })))
@@ -158,13 +173,18 @@ impl<R: Read> Iterator for MessageIterator<R> {
                 let checksum = read_byte(&mut self.reader, &mut bytes_read).ok()?;
 
                 if !is_valid_message(bytes_read, message_length, checksum) {
-                    return Some(Err(Error::from(ErrorKind::InvalidData)));
+                    return Some(Err(Error::new(
+                        ErrorKind::InvalidData,
+                        "Invalid SiteVisit message",
+                    )));
                 }
 
                 Some(Ok(Message::SiteVisit(SiteVisit { site, populations })))
             }
-            Ok(_) => Some(Err(Error::from(ErrorKind::InvalidData))),
-            Err(e) if e.kind() == ErrorKind::WouldBlock => None,
+            Ok(_) => Some(Err(Error::new(
+                ErrorKind::InvalidData,
+                "Invalid starting byte",
+            ))),
             Err(e) => Some(Err(e)),
         }
     }

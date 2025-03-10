@@ -35,7 +35,7 @@ pub struct TargetPopulations {
 #[derive(Clone, PartialEq, Debug)]
 pub struct CreatePolicy {
     pub species: String,
-    pub action: char,
+    pub action: u8,
 }
 
 #[derive(Clone, PartialEq, Debug)]
